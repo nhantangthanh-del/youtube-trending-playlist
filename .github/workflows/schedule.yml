@@ -8,7 +8,7 @@ on:
     # 15:01 giờ VN (UTC+7)
     - cron: "1 8 * * *"
 
-  workflow_dispatch:  # Cho phép chạy tay
+  workflow_dispatch:
 
 jobs:
   update-playlist:
@@ -26,25 +26,26 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Verify secrets presence (safe)
+      # Check secrets an toàn (không lộ giá trị)
+      - name: Verify secrets presence
         run: |
-          if [ -z "${{ secrets.YT_CLIENT_ID }}" ]; then
-            echo "❌ Missing secret: YT_CLIENT_ID"
+          if [ -z "${{ secrets.YOUTUBE_CLIENT_ID }}" ]; then
+            echo "❌ Missing secret: YOUTUBE_CLIENT_ID"
             exit 1
           fi
-          if [ -z "${{ secrets.YT_CLIENT_SECRET }}" ]; then
-            echo "❌ Missing secret: YT_CLIENT_SECRET"
+          if [ -z "${{ secrets.YOUTUBE_CLIENT_SECRET }}" ]; then
+            echo "❌ Missing secret: YOUTUBE_CLIENT_SECRET"
             exit 1
           fi
-          if [ -z "${{ secrets.YT_REFRESH_TOKEN }}" ]; then
-            echo "❌ Missing secret: YT_REFRESH_TOKEN"
+          if [ -z "${{ secrets.YOUTUBE_REFRESH_TOKEN }}" ]; then
+            echo "❌ Missing secret: YOUTUBE_REFRESH_TOKEN"
             exit 1
           fi
           echo "✅ All required secrets are present"
 
       - name: Run playlist update script
         env:
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
         run: python main.py
