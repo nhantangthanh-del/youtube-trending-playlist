@@ -6,11 +6,11 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 
 # ================== CONFIG ==================
-CLIENT_ID = os.environ["YT_CLIENT_ID"]
-CLIENT_SECRET = os.environ["YT_CLIENT_SECRET"]
-REFRESH_TOKEN = os.environ["YT_REFRESH_TOKEN"]
+CLIENT_ID = os.environ["YOUTUBE_CLIENT_ID"]
+CLIENT_SECRET = os.environ["YOUTUBE_CLIENT_SECRET"]
+REFRESH_TOKEN = os.environ["YOUTUBE_REFRESH_TOKEN"]
 
-# PLAYLIST MỚI (đã cập nhật)
+# PLAYLIST MỚI
 PLAYLIST_ID = "PLBJ12BPnlyEhL8ryH-IqEL0Aeu69MePm6"
 
 CHART_URL = "https://charts.youtube.com/charts/TrendingVideos/vn/RightNow"
@@ -38,7 +38,7 @@ HEADERS = {
 # ================== SCRAPE ==================
 def get_video_ids():
     """
-    Logic thực dụng – chắc ăn:
+    Logic thực dụng:
     - Regex videoId đơn giản
     - Loại video rác
     - Deduplicate
@@ -82,7 +82,6 @@ def get_video_ids():
 
     return final_kw
 
-
 # ================== YOUTUBE ==================
 def get_youtube_service():
     creds = Credentials(
@@ -93,7 +92,6 @@ def get_youtube_service():
         client_secret=CLIENT_SECRET,
     )
     return build("youtube", "v3", credentials=creds)
-
 
 def clear_playlist(youtube):
     print("🧹 Đang xoá video cũ...")
@@ -110,9 +108,7 @@ def clear_playlist(youtube):
             total += 1
             time.sleep(0.2)
         req = youtube.playlistItems().list_next(req, res)
-
     print(f"🗑️ Đã xoá {total} video cũ")
-
 
 def add_videos(youtube, ids):
     print(f"➕ Thêm {len(ids)} video mới...")
@@ -132,7 +128,6 @@ def add_videos(youtube, ids):
         ).execute()
         time.sleep(0.2)
 
-
 # ================== MAIN ==================
 def main():
     print("🚀 START UPDATE TRENDING PLAYLIST")
@@ -146,12 +141,10 @@ def main():
     print("🎵 Video #1:", f"https://www.youtube.com/watch?v={video_ids[0]}")
 
     youtube = get_youtube_service()
-
     clear_playlist(youtube)
     add_videos(youtube, video_ids)
 
     print("🎉 UPDATE PLAYLIST THÀNH CÔNG!")
-
 
 if __name__ == "__main__":
     try:
