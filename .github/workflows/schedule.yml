@@ -2,9 +2,13 @@ name: Update Trending Playlist
 
 on:
   schedule:
-    - cron: "0 0 * * *"    # 07:00 sáng (giờ VN)
-    - cron: "1 8 * * *"    # 15:01 chiều (giờ VN)
-  workflow_dispatch:       # Cho phép chạy tay
+    # 07:00 giờ VN (UTC+7)
+    - cron: "0 0 * * *"
+
+    # 15:01 giờ VN (UTC+7)
+    - cron: "1 8 * * *"
+
+  workflow_dispatch:  # Cho phép chạy tay
 
 jobs:
   update-playlist:
@@ -17,10 +21,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.x"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: pip install -r requirements.txt
+
+      - name: Verify secrets presence (safe)
+        run: |
+          if [ -z "${{ secrets.YT_CLIENT_ID }}" ]; then
+            echo "❌ Missing secret: YT_CLIENT_ID"
+            exit 1
+          fi
+          if [ -z "${{ secrets.YT_CLIENT_SECRET }}" ]; then
+            echo "❌ Missing secret: YT_CLIENT_SECRET"
+            exit 1
+          fi
+          if [ -z "${{ secrets.YT_REFRESH_TOKEN }}" ]; then
+            echo "❌ Missing secret: YT_REFRESH_TOKEN"
+            exit 1
+          fi
+          echo "✅ All required secrets are present"
 
       - name: Run playlist update script
         env:
