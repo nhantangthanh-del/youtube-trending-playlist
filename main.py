@@ -1,83 +1,137 @@
 import os
+import re
+import time
 import requests
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from dotenv import load_dotenv
+from google.oauth2.credentials import Credentials
 
-load_dotenv()
+# ================= CONFIG =================
+CLIENT_ID = os.environ["YT_CLIENT_ID"]
+CLIENT_SECRET = os.environ["YT_CLIENT_SECRET"]
+REFRESH_TOKEN = os.environ["YT_REFRESH_TOKEN"]
 
-CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID")
-CLIENT_SECRET = os.getenv("YOUTUBE_CLIENT_SECRET")
-REFRESH_TOKEN = os.getenv("YOUTUBE_REFRESH_TOKEN")
-PLAYLIST_TITLE = os.getenv("PLAYLIST_TITLE")
-PLAYLIST_DESCRIPTION = os.getenv("PLAYLIST_DESCRIPTION")
+PLAYLIST_ID = "PLBJ12BPnlyEhG-6JBuzkBQLdfDcyKfR1m"
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+CHART_URL = "https://charts.youtube.com/charts/TrendingVideos/vn/RightNow"
+KWORB_URL = "https://kworb.net/youtube/trending/vn.html"
 
-def get_authenticated_service():
+TARGET_COUNT = 30
+TIMEOUT = 15
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
+# ================= SCRAPE =================
+def get_trending_ids():
+    """
+    Chỉ trả về danh sách khi đủ 30 video
+    Không đủ → raise → KHÔNG update
+    """
+    try:
+        res = requests.get(CHART_URL, headers=HEADERS, timeout=TIMEOUT)
+        res.raise_for_status()
+
+        ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', res.text)
+
+        uniq = []
+        for v in ids:
+            if v not in uniq:
+                uniq.append(v)
+            if len(uniq) == TARGET_COUNT:
+                break
+
+        if len(uniq) != TARGET_COUNT:
+            raise RuntimeError(f"Charts chỉ có {len(uniq)} video")
+
+        print("✅ Lấy đủ 30 video từ YouTube Charts")
+        return uniq
+
+    except Exception as e:
+        print("⚠️ Charts lỗi:", e)
+
+    # fallback
+    kw = requests.get(KWORB_URL, headers=HEADERS, timeout=TIMEOUT)
+    ids = re.findall(r'watch\?v=([a-zA-Z0-9_-]{11})', kw.text)[:TARGET_COUNT]
+
+    if len(ids) != TARGET_COUNT:
+        raise RuntimeError("Kworb cũng không đủ 30 video")
+
+    print("⚠️ Dùng fallback Kworb")
+    return ids
+
+
+# ================= YOUTUBE =================
+def get_youtube_service():
     creds = Credentials(
         None,
         refresh_token=REFRESH_TOKEN,
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
         token_uri="https://oauth2.googleapis.com/token",
-        scopes=SCOPES
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET
     )
     return build("youtube", "v3", credentials=creds)
 
-def get_trending_videos():
-    url = "https://charts.youtube.com/charts/TrendingVideos/vn/RightNow"
-    html = requests.get(url).text
-    parts = html.split("videoId")
-    ids = []
-    for p in parts[1:31]:
-        v = p.split('"')[1]
-        ids.append(v)
-    return ids
 
-def find_playlist(youtube):
-    req = youtube.playlists().list(part="id,snippet", mine=True).execute()
-    for pl in req.get("items", []):
-        if pl["snippet"]["title"] == PLAYLIST_TITLE:
-            return pl["id"]
-    return None
+def clear_playlist(youtube):
+    req = youtube.playlistItems().list(
+        part="id",
+        playlistId=PLAYLIST_ID,
+        maxResults=50
+    )
+    while req:
+        res = req.execute()
+        for it in res.get("items", []):
+            youtube.playlistItems().delete(id=it["id"]).execute()
+            time.sleep(0.2)
+        req = youtube.playlistItems().list_next(req, res)
 
-def create_playlist(youtube):
-    body = {
-        "snippet": {
-            "title": PLAYLIST_TITLE,
-            "description": PLAYLIST_DESCRIPTION
-        },
-        "status": {"privacyStatus": "public"}
-    }
-    res = youtube.playlists().insert(part="snippet,status", body=body).execute()
-    return res["id"]
 
-def clear_playlist(youtube, playlist_id):
-    items = youtube.playlistItems().list(
-        playlistId=playlist_id, part="id", maxResults=50
-    ).execute().get("items", [])
-    for it in items:
-        youtube.playlistItems().delete(id=it["id"]).execute()
-
-def add_videos_to_playlist(youtube, playlist_id, video_ids):
-    for vid in video_ids:
+def add_videos(youtube, ids):
+    for idx, vid in enumerate(ids):
         youtube.playlistItems().insert(
             part="snippet",
             body={
                 "snippet": {
-                    "playlistId": playlist_id,
-                    "resourceId": {"kind": "youtube#video", "videoId": vid}
+                    "playlistId": PLAYLIST_ID,
+                    "position": idx,
+                    "resourceId": {
+                        "kind": "youtube#video",
+                        "videoId": vid
+                    }
                 }
             }
         ).execute()
+        time.sleep(0.2)
+
+
+# ================= MAIN =================
+def main():
+    print("🚀 START UPDATE TRENDING PLAYLIST")
+
+    # 1️⃣ LẤY DATA TRƯỚC – FAIL THÌ DỪNG
+    ids = get_trending_ids()
+    print("🎵 Video #1:", f"https://www.youtube.com/watch?v={ids[0]}")
+
+    # 2️⃣ KẾT NỐI API
+    yt = get_youtube_service()
+
+    # 3️⃣ UPDATE (xoá rồi thêm)
+    clear_playlist(yt)
+    add_videos(yt, ids)
+
+    print("🎉 UPDATE THÀNH CÔNG – PLAYLIST AN TOÀN")
+
 
 if __name__ == "__main__":
-    yt = get_authenticated_service()
-    vids = get_trending_videos()
-    pl_id = find_playlist(yt)
-    if not pl_id:
-        pl_id = create_playlist(yt)
-    clear_playlist(yt, pl_id)
-    add_videos_to_playlist(yt, pl_id, vids)
-    print("✅ Playlist cập nhật thành công!")
+    try:
+        main()
+    except Exception as e:
+        print("🔥 FAILED – PLAYLIST KHÔNG BỊ ĐỘNG TỚI")
+        print(e)
+        raise
